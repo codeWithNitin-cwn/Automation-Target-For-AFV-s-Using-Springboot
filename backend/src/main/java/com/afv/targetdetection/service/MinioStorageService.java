@@ -27,7 +27,7 @@ public class MinioStorageService implements FileStorageService {
                     PutObjectArgs.builder()
                             .bucket(bucketName)
                             .object(path)
-                            .stream(file.getInputStream(), file.getSize(), -1)
+                            .stream(file.getInputStream(), file.getSize(), -1L)
                             .contentType(file.getContentType())
                             .build()
             );
