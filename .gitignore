@@ -74,3 +74,7 @@ dist-ssr/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Uploads & Media Cache
+uploads/
+backend/uploads/

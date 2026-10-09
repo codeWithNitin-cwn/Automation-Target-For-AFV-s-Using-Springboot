@@ -23,8 +23,27 @@ public class AiInferenceClient {
 
     public Mono<AiInferenceResponse> runInference(MultipartFile file, String modelVersion) {
         MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
-        // file.getResource() extracts the resource wrapper containing the inputStream, size, and filename
+ 
         bodyBuilder.part("file", file.getResource());
+        bodyBuilder.part("model_version", modelVersion);
+
+        return this.webClient.post()
+                .uri("/inference")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .retrieve()
+                .bodyToMono(AiInferenceResponse.class);
+    }
+
+    public Mono<AiInferenceResponse> runInference(byte[] fileBytes, String filename, String modelVersion) {
+        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(fileBytes) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+        bodyBuilder.part("file", resource);
         bodyBuilder.part("model_version", modelVersion);
 
         return this.webClient.post()

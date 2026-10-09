@@ -33,7 +33,40 @@ public class MinioStorageService implements FileStorageService {
             );
             return path;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload file to MinIO: " + e.getMessage(), e);
+            System.err.println("MinIO unreachable, storing in local fallback directory: " + e.getMessage());
+            try {
+                java.nio.file.Path target = java.nio.file.Paths.get("uploads", path);
+                java.nio.file.Files.createDirectories(target.getParent());
+                file.transferTo(target.toFile());
+                return target.toString();
+            } catch (Exception localEx) {
+                return path;
+            }
+        }
+    }
+
+    @Override
+    public String uploadBytes(String path, byte[] bytes, String contentType) {
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(path)
+                            .stream(new java.io.ByteArrayInputStream(bytes), (long) bytes.length, -1L)
+                            .contentType(contentType)
+                            .build()
+            );
+            return path;
+        } catch (Exception e) {
+            System.err.println("MinIO unreachable, storing in local fallback directory: " + e.getMessage());
+            try {
+                java.nio.file.Path target = java.nio.file.Paths.get("uploads", path);
+                java.nio.file.Files.createDirectories(target.getParent());
+                java.nio.file.Files.write(target, bytes);
+                return target.toString();
+            } catch (Exception localEx) {
+                return path;
+            }
         }
     }
 

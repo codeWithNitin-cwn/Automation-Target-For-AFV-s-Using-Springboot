@@ -88,6 +88,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 In-Memory Database Driver (for dev profile) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- JWT (JSON Web Token) library -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

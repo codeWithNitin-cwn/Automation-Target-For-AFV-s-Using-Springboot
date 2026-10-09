@@ -43,20 +43,29 @@ public class AnalysisServiceImpl implements AnalysisService {
             currentUser = userRepository.findByUsername(username).orElse(null);
         }
 
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read uploaded file content: " + e.getMessage(), e);
+        }
+        String originalFilename = file.getOriginalFilename();
+        String contentType = file.getContentType();
+
         // Create initial PENDING Analysis entity
         Analysis analysis = Analysis.builder()
                 .status("PENDING")
-                .fileName(file.getOriginalFilename())
-                .fileType(file.getContentType())
+                .fileName(originalFilename)
+                .fileType(contentType)
                 .fileSize(file.getSize())
                 .storagePath("") // Will be filled by Async worker after upload
                 .user(currentUser)
                 .build();
 
-        analysis = analysisRepository.save(analysis);
+        analysis = analysisRepository.saveAndFlush(analysis);
 
         // Hand over the execution to a background worker to avoid thread blocking
-        asyncAnalysisWorker.processAnalysisAsync(analysis.getId(), file, modelVersion);
+        asyncAnalysisWorker.processAnalysisAsync(analysis.getId(), fileBytes, originalFilename, contentType, modelVersion);
 
         return mapToResponse(analysis);
     }
