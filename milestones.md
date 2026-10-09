@@ -1,6 +1,9 @@
 # Project Milestones Reference Guide
 
-This document outlines the detailed plan, structural components, and theoretical interview prep for all implementation milestones of the **AI-Based Automated Target Detection for AFVs** platform.
+> **Current Project Status:** All core implementation milestones (Backend Architecture, YOLOv8 AI Service, STOMP WebSockets, and NATO APP-6 Tactical React Console) have been **COMPLETED**.
+>
+> **Final Remaining Milestone:**
+> - [ ] **Production Database Connection & Cloud Deployment**: Connect persistent external PostgreSQL and deploy the distributed system via Docker Compose / Cloud.
 
 ---
 

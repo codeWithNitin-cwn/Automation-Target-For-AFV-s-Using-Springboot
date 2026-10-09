@@ -33,7 +33,7 @@ The platform integrates deep-learning computer vision models (YOLOv8) with a hig
 - [Environment Variables Configuration](#-environment-variables-configuration)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Security & Compliance](#-security--compliance)
-- [Roadmap & Future Improvements](#-roadmap--future-improvements)
+- [Project Status & Remaining Milestone](#-project-status--remaining-milestone)
 
 ---
 
@@ -353,12 +353,21 @@ cd backend
 
 ---
 
-## 🗺 Roadmap & Future Improvements
+## 🎯 Project Status & Remaining Milestone
 
-- [ ] **Edge Deployment**: On-premise deployment optimized for NVIDIA Jetson AGX Orin embedded tactical units.
-- [ ] **Thermal / FLIR Integration**: Dedicated vision model fine-tuning for forward-looking infrared and thermal imagery.
-- [ ] **RTSP Live Stream Ingestion**: Real-time video stream chunking and GPU hardware-accelerated target tracking.
-- [ ] **Kafka Distributed Event Mesh**: Scaling message ingestion for multi-vehicle fleet coordination.
+All core development milestones across the platform are complete:
+- [x] **Spring Boot 3.3 Core Backend**: Asynchronous analysis pipeline, REST APIs, and thread pool orchestration.
+- [x] **Ultralytics YOLOv8 AI Microservice**: Real deep-learning computer vision inference (`yolov8n.pt`) with tactical asset recognition.
+- [x] **Tactical Command & Control Frontend**: Complete 5-page suite built to NATO APP-6 / MIL-STD-2525 symbology standards (Command Center, Scout Ingestion, Analysis Detail, Mission Archives, Security Clearance).
+- [x] **Real-Time Telemetry & WebSocket Push**: STOMP live progress updates (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED`) and health diagnostics.
+- [x] **Enterprise Security**: Stateless JWT authentication, RBAC, and secure image streaming.
+
+---
+
+### 📌 Final Remaining Milestone:
+- [ ] **Production Database Integration & Live Cloud Deployment**:
+  - Connect dedicated persistent **PostgreSQL** database (migrating from local dev H2 in-memory profile).
+  - Deploy the complete multi-service stack (Spring Boot Backend, Python FastAPI AI Service, React Frontend, PostgreSQL, and MinIO) using Docker Compose or Cloud Server Hosting.
 
 ---
 
