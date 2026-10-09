@@ -23,13 +23,29 @@ public class AnalysisServiceImpl implements AnalysisService {
     private final AnalysisRepository analysisRepository;
     private final UserRepository userRepository;
     private final AsyncAnalysisWorker asyncAnalysisWorker;
+    private final FileStorageService fileStorageService;
 
     public AnalysisServiceImpl(AnalysisRepository analysisRepository,
                                UserRepository userRepository,
-                               AsyncAnalysisWorker asyncAnalysisWorker) {
+                               AsyncAnalysisWorker asyncAnalysisWorker,
+                               FileStorageService fileStorageService) {
         this.analysisRepository = analysisRepository;
         this.userRepository = userRepository;
         this.asyncAnalysisWorker = asyncAnalysisWorker;
+        this.fileStorageService = fileStorageService;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.afv.targetdetection.dto.AnalysisImage getAnalysisImage(UUID id) {
+        Analysis analysis = analysisRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Analysis record not found with ID: " + id));
+        if (analysis.getStoragePath() == null || analysis.getStoragePath().isBlank()) {
+            throw new ResourceNotFoundException("Image file not available for analysis: " + id);
+        }
+        java.io.InputStream is = fileStorageService.downloadFile(analysis.getStoragePath());
+        String contentType = analysis.getFileType() != null ? analysis.getFileType() : "application/octet-stream";
+        return new com.afv.targetdetection.dto.AnalysisImage(is, contentType, analysis.getFileName());
     }
 
     @Override

@@ -47,32 +47,37 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<JwtResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequest.getUsernameOrEmail(),
-                        loginRequest.getPassword()
-                )
-        );
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            loginRequest.getUsernameOrEmail(),
+                            loginRequest.getPassword()
+                    )
+            );
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        String jwt = tokenProvider.generateToken(authentication);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = tokenProvider.generateToken(authentication);
 
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        User user = userRepository.findByUsername(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found after authentication"));
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            User user = userRepository.findByUsername(userDetails.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found after authentication"));
 
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toList());
+            List<String> roles = userDetails.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .collect(Collectors.toList());
 
-        return ResponseEntity.ok(JwtResponse.builder()
-                .token(jwt)
-                .id(user.getId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .roles(roles)
-                .build());
+            return ResponseEntity.ok(JwtResponse.builder()
+                    .token(jwt)
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .email(user.getEmail())
+                    .roles(roles)
+                    .build());
+        } catch (org.springframework.security.core.AuthenticationException ex) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of("message", "Invalid username or password"));
+        }
     }
 
     @PostMapping("/register")
@@ -89,7 +94,7 @@ public class AuthController {
                     .body("Error: Email is already in use!");
         }
 
-        // Creating user's account
+        // Creating user's account with server-side assigned ROLE_OPERATOR default
         User user = User.builder()
                 .username(registerRequest.getUsername())
                 .email(registerRequest.getEmail())
@@ -97,37 +102,15 @@ public class AuthController {
                 .enabled(true)
                 .build();
 
-        Set<String> strRoles = registerRequest.getRoles();
         Set<Role> roles = new HashSet<>();
-
-        if (strRoles == null || strRoles.isEmpty()) {
-            Role viewerRole = roleRepository.findByName("ROLE_VIEWER")
-                    .orElseThrow(() -> new RuntimeException("Error: Role 'ROLE_VIEWER' is not found."));
-            roles.add(viewerRole);
-        } else {
-            strRoles.forEach(role -> {
-                switch (role.toUpperCase()) {
-                    case "ADMIN":
-                        Role adminRole = roleRepository.findByName("ROLE_ADMIN")
-                                .orElseThrow(() -> new RuntimeException("Error: Role 'ROLE_ADMIN' is not found."));
-                        roles.add(adminRole);
-                        break;
-                    case "OPERATOR":
-                        Role operatorRole = roleRepository.findByName("ROLE_OPERATOR")
-                                .orElseThrow(() -> new RuntimeException("Error: Role 'ROLE_OPERATOR' is not found."));
-                        roles.add(operatorRole);
-                        break;
-                    default:
-                        Role viewerRole = roleRepository.findByName("ROLE_VIEWER")
-                                .orElseThrow(() -> new RuntimeException("Error: Role 'ROLE_VIEWER' is not found."));
-                        roles.add(viewerRole);
-                }
-            });
-        }
+        Role operatorRole = roleRepository.findByName("ROLE_OPERATOR")
+                .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_OPERATOR").build()));
+        roles.add(operatorRole);
 
         user.setRoles(roles);
         userRepository.save(user);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body("User registered successfully!");
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(java.util.Map.of("message", "User registered successfully!"));
     }
 }

@@ -72,6 +72,24 @@ public class MinioStorageService implements FileStorageService {
 
     @Override
     public InputStream downloadFile(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty");
+        }
+
+        // 1. Try local disk first if path exists directly or inside uploads/
+        try {
+            java.nio.file.Path p = java.nio.file.Paths.get(path);
+            if (java.nio.file.Files.exists(p) && !java.nio.file.Files.isDirectory(p)) {
+                return java.nio.file.Files.newInputStream(p);
+            }
+            java.nio.file.Path fallback = java.nio.file.Paths.get("uploads", path);
+            if (java.nio.file.Files.exists(fallback) && !java.nio.file.Files.isDirectory(fallback)) {
+                return java.nio.file.Files.newInputStream(fallback);
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2. Try MinIO
         try {
             return minioClient.getObject(
                     GetObjectArgs.builder()
@@ -80,7 +98,7 @@ public class MinioStorageService implements FileStorageService {
                             .build()
             );
         } catch (Exception e) {
-            throw new RuntimeException("Failed to download file from MinIO: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to download file from MinIO or local storage: " + e.getMessage(), e);
         }
     }
 }

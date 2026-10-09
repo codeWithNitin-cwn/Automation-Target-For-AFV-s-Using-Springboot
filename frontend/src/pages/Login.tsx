@@ -1,249 +1,644 @@
 import React, { useState } from 'react';
-import { Shield, Lock, User, Mail, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
-import { authApi } from '../services/api';
-import { UserProfile } from '../types';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Shield, Eye, EyeOff, Lock, User, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
-interface LoginProps {
-  onLoginSuccess: (user: UserProfile) => void;
-}
+export const Login: React.FC = () => {
+  const { login, register, sessionExpired, clearSessionExpiredNotice } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-  const [isRegister, setIsRegister] = useState(false);
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form states
+  const [usernameOrEmail, setUsernameOrEmail] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Validation & error states
+  const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({});
+  const [topError, setTopError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const redirectPath = (location.state as any)?.from?.pathname || '/';
+
+  const validateLogin = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!usernameOrEmail.trim()) {
+      errors.usernameOrEmail = 'Username or email is required';
+    } else if (usernameOrEmail.trim().length < 3) {
+      errors.usernameOrEmail = 'Must be at least 3 characters';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (password.length < 6) {
+      errors.password = 'Password must be at least 6 characters';
+    }
+
+    setInlineErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateRegister = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!username.trim()) {
+      errors.username = 'Username is required';
+    } else if (username.trim().length < 3 || username.trim().length > 50) {
+      errors.username = 'Username must be between 3 and 50 characters';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      errors.email = 'Email address is required';
+    } else if (!emailRegex.test(email.trim()) || email.length > 100) {
+      errors.email = 'Please provide a valid email (up to 100 characters)';
+    }
+
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (password.length < 6 || password.length > 100) {
+      errors.password = 'Password must be between 6 and 100 characters';
+    }
+
+    setInlineErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setLoading(true);
+    setTopError(null);
+    clearSessionExpiredNotice();
 
+    if (!validateLogin()) return;
+
+    setIsSubmitting(true);
     try {
-      if (isRegister) {
-        await authApi.register({
-          username,
-          email,
-          password,
-          roles: ['OPERATOR']
-        });
-        setSuccessMessage('Registration successful! Please login with your credentials.');
-        setIsRegister(false);
-        setPassword('');
-      } else {
-        const response = await authApi.login({
-          usernameOrEmail: username,
-          password: password,
-        });
-
-        localStorage.setItem('token', response.token);
-        const profile: UserProfile = {
-          username: response.username,
-          email: response.email,
-          roles: response.roles,
-        };
-        localStorage.setItem('user', JSON.stringify(profile));
-        onLoginSuccess(profile);
-      }
+      await login({ usernameOrEmail: usernameOrEmail.trim(), password });
+      navigate(redirectPath, { replace: true });
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Authentication failure. Check backend connection.';
-      setErrorMessage(msg);
+      if (err.response?.status === 401) {
+        setTopError('Invalid username or password');
+      } else if (err.response?.data?.message) {
+        setTopError(err.response.data.message);
+      } else if (!err.response) {
+        setTopError('Cannot reach server');
+      } else {
+        setTopError('Authentication failed. Please verify credentials.');
+      }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleDemoFill = () => {
-    setUsername('commander_nitin');
-    setPassword('Operator@123');
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTopError(null);
+    setSuccessMessage(null);
+
+    if (!validateRegister()) return;
+
+    setIsSubmitting(true);
+    try {
+      await register({
+        username: username.trim(),
+        email: email.trim(),
+        password,
+      });
+      setSuccessMessage('Registration successful! Operator credentials initialized.');
+      setActiveTab('login');
+      setUsernameOrEmail(username.trim());
+      setPassword('');
+      setUsername('');
+      setEmail('');
+      setInlineErrors({});
+    } catch (err: any) {
+      if (err.response?.data?.message) {
+        setTopError(err.response.data.message);
+      } else if (!err.response) {
+        setTopError('Cannot reach server');
+      } else {
+        setTopError('Registration rejected by server.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const fillDemoCredentials = (u: string, p: string) => {
+    setUsernameOrEmail(u);
+    setPassword(p);
+    setInlineErrors({});
+    setTopError(null);
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 180px)', padding: '20px' }}>
-      <div 
-        className="hud-card hud-card-bracket" 
-        style={{ width: '100%', maxWidth: '440px', padding: '36px' }}
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        position: 'relative',
+      }}
+    >
+      <div
+        className="hud-card hud-card-bracket"
+        style={{
+          width: '100%',
+          maxWidth: '440px',
+          padding: '32px 28px',
+          zIndex: 10,
+        }}
       >
-        {/* Terminal Header */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div 
+        {/* Header with Shield Mark */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div
             style={{
-              width: '54px',
-              height: '54px',
-              margin: '0 auto 16px',
+              width: '52px',
+              height: '52px',
+              margin: '0 auto 12px auto',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(16, 185, 129, 0.25))',
-              border: '1px solid var(--border-cyan)',
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid var(--accent-blue)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: 'var(--shadow-glow-cyan)'
             }}
           >
-            <Shield size={30} color="var(--accent-cyan)" />
+            <Shield size={28} color="var(--accent-blue)" />
           </div>
-          <h2 className="hud-title" style={{ fontSize: '1.4rem', color: 'var(--text-primary)' }}>
+          <h1 style={{ fontSize: '1.4rem', letterSpacing: '0.1em' }}>
             SECURITY CLEARANCE
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>
-            RESTRICTED ACCESS // LEVEL 4 TACTICAL
+          </h1>
+          <p
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              marginTop: '4px',
+              letterSpacing: '0.04em',
+            }}
+          >
+            AFV AUTOMATED TARGET DETECTION PLATFORM
           </p>
         </div>
 
-        {/* Tab Toggle */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', backgroundColor: 'rgba(6, 9, 17, 0.6)', padding: '4px', borderRadius: '8px' }}>
-          <button
-            id="tab-toggle-login"
-            type="button"
-            onClick={() => { setIsRegister(false); setErrorMessage(null); }}
+        {/* Session Expired Notice */}
+        {sessionExpired && (
+          <div
             style={{
-              flex: 1,
-              padding: '8px',
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
               borderRadius: '6px',
-              border: 'none',
-              background: !isRegister ? 'var(--accent-cyan)' : 'transparent',
-              color: !isRegister ? '#040d1a' : 'var(--text-muted)',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              padding: '10px 14px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12px',
+              color: 'var(--threat-unknown)',
             }}
           >
-            OPERATOR LOGIN
-          </button>
-          <button
-            id="tab-toggle-register"
-            type="button"
-            onClick={() => { setIsRegister(true); setErrorMessage(null); }}
-            style={{
-              flex: 1,
-              padding: '8px',
-              borderRadius: '6px',
-              border: 'none',
-              background: isRegister ? 'var(--accent-cyan)' : 'transparent',
-              color: isRegister ? '#040d1a' : 'var(--text-muted)',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            NEW REGISTRATION
-          </button>
-        </div>
-
-        {/* Alert Notifications */}
-        {errorMessage && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--border-danger)', color: 'var(--accent-crimson)', fontSize: '0.8rem', marginBottom: '20px' }}>
             <AlertCircle size={16} />
-            <span>{errorMessage}</span>
+            <span>Session expired. Please log in again to continue.</span>
           </div>
         )}
 
+        {/* Top Error Notice */}
+        {topError && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12px',
+              color: 'var(--threat-hostile)',
+            }}
+          >
+            <AlertCircle size={16} />
+            <span>{topError}</span>
+          </div>
+        )}
+
+        {/* Success Confirmation Notice */}
         {successMessage && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid var(--border-emerald)', color: 'var(--accent-emerald)', fontSize: '0.8rem', marginBottom: '20px' }}>
+          <div
+            style={{
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '12px',
+              color: 'var(--status-nominal)',
+            }}
+          >
             <CheckCircle2 size={16} />
             <span>{successMessage}</span>
           </div>
         )}
 
-        {/* Form Fields */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-mono)' }}>
-              IDENTIFIER (USERNAME OR CALLSIGN)
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="input-auth-username"
-                type="text"
-                className="hud-input"
-                placeholder="e.g. operator_alpha"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                style={{ paddingLeft: '38px' }}
-              />
-              <User size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            </div>
-          </div>
+        {/* Tab Switcher */}
+        <div
+          style={{
+            display: 'flex',
+            borderBottom: '1px solid var(--border-muted)',
+            marginBottom: '20px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('login');
+              setInlineErrors({});
+              setTopError(null);
+            }}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'login' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+              color: activeTab === 'login' ? 'var(--accent-blue)' : 'var(--text-muted)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+            }}
+          >
+            Operator Login
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('register');
+              setInlineErrors({});
+              setTopError(null);
+            }}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'register' ? '2px solid var(--accent-blue)' : '2px solid transparent',
+              color: activeTab === 'register' ? 'var(--accent-blue)' : 'var(--text-muted)',
+              fontFamily: 'var(--font-display)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+            }}
+          >
+            New Registration
+          </button>
+        </div>
 
-          {isRegister && (
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-mono)' }}>
-                TACTICAL COMM-LINK (EMAIL)
+        {/* Tab 1: Operator Login Form */}
+        {activeTab === 'login' && (
+          <form onSubmit={handleLoginSubmit} noValidate>
+            <div style={{ marginBottom: '16px' }}>
+              <label
+                htmlFor="login-ident"
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '6px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-display)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                CALLSIGN / USERNAME OR EMAIL
               </label>
               <div style={{ position: 'relative' }}>
                 <input
-                  id="input-auth-email"
+                  id="login-ident"
+                  type="text"
+                  className="hud-input"
+                  style={{
+                    paddingLeft: '36px',
+                    borderColor: inlineErrors.usernameOrEmail ? 'var(--threat-hostile)' : undefined,
+                  }}
+                  placeholder="e.g. operator_nitin"
+                  value={usernameOrEmail}
+                  onChange={(e) => setUsernameOrEmail(e.target.value)}
+                  autoComplete="username"
+                  autoFocus
+                />
+                <User
+                  size={16}
+                  color="var(--text-dim)"
+                  style={{ position: 'absolute', left: '12px', top: '10px' }}
+                />
+              </div>
+              {inlineErrors.usernameOrEmail && (
+                <div style={{ fontSize: '11px', color: 'var(--threat-hostile)', marginTop: '4px' }}>
+                  {inlineErrors.usernameOrEmail}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '22px' }}>
+              <label
+                htmlFor="login-pwd"
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '6px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-display)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                SECURITY PASSPHRASE
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="login-pwd"
+                  type={showPassword ? 'text' : 'password'}
+                  className="hud-input"
+                  style={{
+                    paddingLeft: '36px',
+                    paddingRight: '36px',
+                    borderColor: inlineErrors.password ? 'var(--threat-hostile)' : undefined,
+                  }}
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <Lock
+                  size={16}
+                  color="var(--text-dim)"
+                  style={{ position: 'absolute', left: '12px', top: '10px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '8px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                  }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {inlineErrors.password && (
+                <div style={{ fontSize: '11px', color: 'var(--threat-hostile)', marginTop: '4px' }}>
+                  {inlineErrors.password}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '10px' }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  AUTHENTICATING...
+                </>
+              ) : (
+                'ENTER COMMAND CONSOLE'
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Tab 2: New Registration Form */}
+        {activeTab === 'register' && (
+          <form onSubmit={handleRegisterSubmit} noValidate>
+            <div style={{ marginBottom: '14px' }}>
+              <label
+                htmlFor="reg-username"
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '6px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-display)',
+                }}
+              >
+                OPERATOR USERNAME (3-50 CHARS)
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="reg-username"
+                  type="text"
+                  className="hud-input"
+                  style={{
+                    paddingLeft: '36px',
+                    borderColor: inlineErrors.username ? 'var(--threat-hostile)' : undefined,
+                  }}
+                  placeholder="e.g. operator_bravo"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                />
+                <User
+                  size={16}
+                  color="var(--text-dim)"
+                  style={{ position: 'absolute', left: '12px', top: '10px' }}
+                />
+              </div>
+              {inlineErrors.username && (
+                <div style={{ fontSize: '11px', color: 'var(--threat-hostile)', marginTop: '4px' }}>
+                  {inlineErrors.username}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label
+                htmlFor="reg-email"
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '6px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-display)',
+                }}
+              >
+                OFFICIAL EMAIL (UP TO 100 CHARS)
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="reg-email"
                   type="email"
                   className="hud-input"
-                  placeholder="operator@defense.afv.net"
-                  required
+                  style={{
+                    paddingLeft: '36px',
+                    borderColor: inlineErrors.email ? 'var(--threat-hostile)' : undefined,
+                  }}
+                  placeholder="e.g. operator@recon.afv.mil"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  style={{ paddingLeft: '38px' }}
+                  autoComplete="email"
                 />
-                <Mail size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <Mail
+                  size={16}
+                  color="var(--text-dim)"
+                  style={{ position: 'absolute', left: '12px', top: '10px' }}
+                />
               </div>
+              {inlineErrors.email && (
+                <div style={{ fontSize: '11px', color: 'var(--threat-hostile)', marginTop: '4px' }}>
+                  {inlineErrors.email}
+                </div>
+              )}
             </div>
-          )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-mono)' }}>
-              SECURITY PASSPHRASE
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="input-auth-password"
-                type="password"
-                className="hud-input"
-                placeholder="••••••••••••"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{ paddingLeft: '38px' }}
-              />
-              <Lock size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <div style={{ marginBottom: '22px' }}>
+              <label
+                htmlFor="reg-pwd"
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '6px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-display)',
+                }}
+              >
+                SECURITY PASSPHRASE (6-100 CHARS)
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="reg-pwd"
+                  type={showPassword ? 'text' : 'password'}
+                  className="hud-input"
+                  style={{
+                    paddingLeft: '36px',
+                    paddingRight: '36px',
+                    borderColor: inlineErrors.password ? 'var(--threat-hostile)' : undefined,
+                  }}
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <Lock
+                  size={16}
+                  color="var(--text-dim)"
+                  style={{ position: 'absolute', left: '12px', top: '10px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '8px',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                  }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {inlineErrors.password && (
+                <div style={{ fontSize: '11px', color: 'var(--threat-hostile)', marginTop: '4px' }}>
+                  {inlineErrors.password}
+                </div>
+              )}
             </div>
-          </div>
 
-          <button
-            id="btn-auth-submit"
-            type="submit"
-            disabled={loading}
-            className="btn-primary"
-            style={{ width: '100%', marginTop: '8px', padding: '12px' }}
-          >
-            {loading ? 'AUTHENTICATING...' : isRegister ? 'REGISTER OPERATOR' : 'AUTHORIZE SESSION'}
-            <ArrowRight size={16} />
-          </button>
-        </form>
+            <div
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-dim)',
+                marginBottom: '16px',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              * New accounts are provisioned with default OPERATOR clearance.
+            </div>
 
-        {/* Demo Fast-Fill Helper */}
-        <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-muted)', textAlign: 'center' }}>
-          <button
-            id="btn-demo-creds"
-            type="button"
-            onClick={handleDemoFill}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '10px' }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  REQUESTING CLEARANCE...
+                </>
+              ) : (
+                'REGISTER AS OPERATOR'
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Demo Credentials - visible only in DEV mode per Section 7.1 */}
+        {import.meta.env.DEV && (
+          <div
             style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--accent-cyan)',
-              fontSize: '0.75rem',
+              marginTop: '24px',
+              paddingTop: '16px',
+              borderTop: '1px solid var(--border-muted)',
+              fontSize: '11px',
               fontFamily: 'var(--font-mono)',
-              cursor: 'pointer',
-              textDecoration: 'underline'
+              textAlign: 'center',
+              color: 'var(--text-dim)',
             }}
           >
-            Quick Fill Demo Credentials
-          </button>
-        </div>
+            <div>[DEV ENVIRONMENT DETECTED]</div>
+            <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => fillDemoCredentials('operator_nitin', 'Operator@123')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent-blue)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                }}
+              >
+                Load Default Operator
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

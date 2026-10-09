@@ -35,6 +35,21 @@ public class AnalysisController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{id}/image")
+    public ResponseEntity<org.springframework.core.io.Resource> getAnalysisImage(@PathVariable("id") UUID id) {
+        com.afv.targetdetection.dto.AnalysisImage image = analysisService.getAnalysisImage(id);
+        org.springframework.http.MediaType mediaType;
+        try {
+            mediaType = org.springframework.http.MediaType.parseMediaType(image.contentType());
+        } catch (Exception e) {
+            mediaType = org.springframework.http.MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + image.fileName() + "\"")
+                .body(new org.springframework.core.io.InputStreamResource(image.inputStream()));
+    }
+
     @GetMapping
     public ResponseEntity<List<AnalysisResponse>> getAnalysisHistory() {
         List<AnalysisResponse> history = analysisService.getAnalysisHistory();

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AnalysisRecord, AuthResponse } from '../types';
+import { AnalysisRecord, AuthResponse, SystemHealthResponse } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -25,9 +25,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear token and let application handle auth state
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Don't trigger session expired if it's the actual login call itself failing
+      if (!error.config.url?.includes('/auth/login')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('session-expired'));
+      }
     }
     return Promise.reject(error);
   }
@@ -38,11 +41,8 @@ export const authApi = {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
     return response.data;
   },
-  register: async (userData: { username: string; email: string; password: string; roles?: string[] }) => {
-    const response = await api.post('/auth/register', {
-      ...userData,
-      roles: userData.roles || ['OPERATOR'],
-    });
+  register: async (userData: { username: string; email: string; password: string }) => {
+    const response = await api.post('/auth/register', userData);
     return response.data;
   },
 };
@@ -66,6 +66,16 @@ export const analysisApi = {
   },
   getHistory: async (): Promise<AnalysisRecord[]> => {
     const response = await api.get<AnalysisRecord[]>('/analyses');
+    return response.data;
+  },
+  getImageUrl: (id: string): string => {
+    return `/api/analyses/${id}/image`;
+  },
+};
+
+export const systemApi = {
+  getHealth: async (): Promise<SystemHealthResponse> => {
+    const response = await api.get<SystemHealthResponse>('/system/health');
     return response.data;
   },
 };
